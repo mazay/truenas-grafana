@@ -1,0 +1,154 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  labels:
+    app: truenas-graphite-exporter
+  name: truenas-graphite-exporter
+  namespace: monitor
+data:
+  # TODO: regex can be improved to reduce amount of mappings
+  graphite_mapping.yaml: |-
+    mappings:
+      # ifstats mapping
+      - match: 'servers\.(.*)\.interface-(.*)\.if_(.*)'
+        match_type: regex
+        name: 'truenas_interface_${3}'
+        labels:
+          hostname: ${1}
+          device: ${2}
+      # dataset metrics mapping
+      - match: 'servers\.(.*)\.df-(.*)\.(.*)'
+        match_type: regex
+        name: 'truenas_dataset_${3}'
+        labels:
+          hostname: ${1}
+          device: ${2}
+      # memory metrics mapping
+      - match: 'servers\.(.*)\.memory\.(.*)'
+        match_type: regex
+        name: 'truenas_${2}'
+        labels:
+          hostname: ${1}
+      # zfs arc metrics mapping
+      - match: 'servers\.(.*)\.zfs_arc\.(.*)'
+        match_type: regex
+        name: 'truenas_zfs_arc_${2}'
+        labels:
+          hostname: ${1}
+      # processes metrics
+      - match: 'servers\.(.*)\.processes\.(.*)'
+        match_type: regex
+        name: 'truenas_processes_${2}'
+        labels:
+          hostname: ${1}
+      # LA metrics
+      - match: 'servers\.(.*)\.load\.load\.(.*)'
+        match_type: regex
+        name: 'truenas_load_${2}'
+        labels:
+          hostname: ${1}
+      # rrd cache metrics
+      - match: 'servers\.(.*)\.rrdcached\.(.*)'
+        match_type: regex
+        name: 'truenas_rrdcached_${2}'
+        labels:
+          hostname: ${1}
+      # swap metrics
+      - match: 'servers\.(.*)\.swap\.(.*)'
+        match_type: regex
+        name: 'truenas_swap_${2}'
+        labels:
+          hostname: ${1}
+      # uptime metric
+      - match: 'servers\.(.*)\.uptime\.(.*)'
+        match_type: regex
+        name: 'truenas_uptime_${2}'
+        labels:
+          hostname: ${1}
+      # disk metrics mapping
+      - match: 'servers\.(.*)\.disk-(.*)\.(.*)\.(.*)'
+        match_type: regex
+        name: 'truenas_${3}_${4}'
+        labels:
+          hostname: ${1}
+          device: ${2}
+      # cpu and nfs metrics mapping
+      - match: 'servers\.(.*)\.(.*)-(.*)\.(.*)'
+        match_type: regex
+        name: 'truenas_${2}_${4}'
+        labels:
+          hostname: ${1}
+          device: ${3}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: truenas-graphite-exporter
+  namespace: monitor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: truenas-graphite-exporter
+  template:
+    metadata:
+      labels:
+        app: truenas-graphite-exporter
+      annotations:
+        prometheus.io/path: /metrics
+        prometheus.io/port: "9108"
+        prometheus.io/scrape: "true"
+    spec:
+      terminationGracePeriodSeconds: 300
+      containers:
+        - image: prom/graphite-exporter:v0.13.1
+          name: truenas-graphite-exporter
+          args:
+            - --graphite.mapping-config=/tmp/graphite_mapping.yaml
+            # - --graphite.mapping-strict-match
+            # - --log.level=debug
+          resources:
+            limits:
+              cpu: 100m
+              memory: 64Mi
+            requests:
+              cpu: 50m
+              memory: 32Mi
+          ports:
+            - containerPort: 9109
+              name: graphite-tcp
+              protocol: TCP
+            - containerPort: 9109
+              name: graphite-udp
+              protocol: UDP
+            - containerPort: 9108
+              name: prometheus
+              protocol: TCP
+          volumeMounts:
+            - mountPath: /tmp
+              name: config-volume
+      volumes:
+      - name: config-volume
+        configMap:
+          defaultMode: 420
+          name: truenas-graphite-exporter
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: truenas-graphite-exporter
+  namespace: monitor
+  labels:
+    app: truenas-graphite-exporter
+spec:
+  ports:
+    - port: 2003
+      targetPort: graphite-tcp
+      protocol: TCP
+  selector:
+    app: truenas-graphite-exporter
+  externalTrafficPolicy: Local
+  sessionAffinity: None
+  type: LoadBalancer
+  loadBalancerIP: 198.51.100.13
