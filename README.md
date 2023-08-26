@@ -11,7 +11,7 @@ This is just a merge of [the truenas forum post](https://www.truenas.com/communi
 
 1. clone the repo:
     ```shell
-    git clone git@github.com:mazay/truenas-grafana.git && cd truenas-grafana
+    git clone https://github.com/mazay/truenas-grafana.git && cd truenas-grafana
     ```
 1. deploy the `graphite-exporter`, mind the `loadBalancerIP` that's where TrueNAS should push metrics to, multiple instance should be able to use that but you might need to bump the `resources`:
     ```shell
